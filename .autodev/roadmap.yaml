@@ -24,9 +24,10 @@ priority:
   - issue: 141
 
   # Journey: capture an outcome before every task is known. Workstreams are the
-  # semantic/portfolio container; workflow dependencies stay in Streamline and
-  # executable scheduling/recurrence stays in ShuffleTask. #143 has an explicit
-  # UX-design gap governed by #138 and must not copy task/workflow state into Core.
+  # semantic/portfolio container and SecondBrain is the sole cross-module
+  # composition point. Workflow dependencies stay in Streamline; executable
+  # scheduling/recurrence stays in ShuffleTask; those products never communicate
+  # directly. #143 has an explicit UX-design gap governed by #138.
   - issue: 143
 
   # Finish the existing Notion migration journey against the corrected product
@@ -62,6 +63,19 @@ priority:
   - issue: 52
   - issue: 53
 
+  # Bridge portfolio meaning to execution without copying execution state into
+  # Core. #145 links a Workstream independently to a Streamline Plan owner and/or
+  # one ShuffleTask TaskCollection (or direct task when genuinely simple).
+  # SecondBrain alone correlates those references; Workstream importance and
+  # ShuffleTask collection score remain deliberately separate.
+  - issue: 145
+
+  # Add the bounded SecondBrain-side Streamline adapter. #148 consumes Streamline
+  # #21 only after Levi alignment permits that product direction, exposes the
+  # minimum summary/ready-work/acknowledgement surface needed by #145/#144/#147,
+  # and contains no ShuffleTask dependency or destination-specific scheduling.
+  - issue: 148
+
   # Search Core and enabled modules with source ownership, restrained metadata,
   # canonical deep links, and safe partial-provider degradation.
   - issue: 54
@@ -87,6 +101,13 @@ priority:
   # consumer exists. Core reminder/retry value is intentionally delivered earlier.
   - issue: 64
   - issue: 65
+
+  # Mediate planning readiness into execution only here, at the composition root.
+  # #147 coordinates #148 and the ShuffleTask host adapter independently, persists
+  # only minimal correlation/idempotency state, and guarantees there is never a
+  # direct Streamline <-> ShuffleTask dependency. It remains blocked until Levi
+  # alignment permits Streamline#19/#21 and both external contracts are stable.
+  - issue: 147
 
   # Ask private cited questions and execute only explicitly confirmed proposals.
   - issue: 71
