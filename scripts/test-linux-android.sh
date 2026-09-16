@@ -159,16 +159,40 @@ fi
 
 export ANDROID_SERIAL="$selected_device"
 
+# Build a normal APK, install it explicitly, and launch the resolved launcher
+# activity ourselves. The MAUI Run target is designed for an interactive run and
+# may return a non-zero status when its launched process terminates; using it as
+# the smoke-test control plane obscures whether installation, launch, or startup
+# stability actually failed.
+dotnet build "$project_path" \
+  --configuration Debug \
+  --no-restore \
+  -f net10.0-android
+
+apk_dir="$repository_root/SecondBrain.Presentation/bin/Debug/net10.0-android"
+apk_path="$(find "$apk_dir" -maxdepth 1 -type f -name '*-Signed.apk' -print -quit)"
+if [[ -z "$apk_path" ]]; then
+  apk_path="$(find "$apk_dir" -maxdepth 1 -type f -name '*.apk' -print -quit)"
+fi
+[[ -n "$apk_path" ]] || fail "no Android APK was produced under $apk_dir"
+
+echo "Installing $(basename -- "$apk_path") on $selected_device..."
+"$adb" -s "$selected_device" install -r -t "$apk_path"
+
 # Do not let a process left over from an earlier run satisfy the startup check,
 # and keep the crash buffer scoped to this launch.
 "$adb" -s "$selected_device" shell am force-stop "$application_id" >/dev/null 2>&1 || true
 "$adb" -s "$selected_device" logcat -b crash -c >/dev/null 2>&1 || true
 
-dotnet build "$project_path" \
-  --configuration Debug \
-  --no-restore \
-  -f net10.0-android \
-  -t:Run
+launcher_component="$(
+  "$adb" -s "$selected_device" shell cmd package resolve-activity --brief "$application_id" 2>/dev/null \
+    | tr -d '\r' \
+    | tail -n 1
+)"
+[[ "$launcher_component" == */* ]] || fail "could not resolve launcher activity for $application_id"
+
+echo "Launching $launcher_component..."
+"$adb" -s "$selected_device" shell am start -W -n "$launcher_component"
 
 started_pid=""
 for _ in {1..30}; do
