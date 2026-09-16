@@ -155,6 +155,20 @@ public sealed class PresentationNavigationContractTests
         });
     }
 
+    [Test]
+    public void Android_MainActivityUsesMauiAppCompatTheme()
+    {
+        var activity = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "SecondBrain.Presentation",
+            "Platforms",
+            "Android",
+            "MainActivity.cs"));
+
+        Assert.That(activity, Does.Contain("Theme = \"@style/Maui.SplashTheme\""),
+            "MauiAppCompatActivity must launch with MAUI's AppCompat-based theme or Android crashes before first frame.");
+    }
+
     private static string ReadPresentationFile(string fileName) =>
         File.ReadAllText(Path.Combine(
             FindRepositoryRoot(),
