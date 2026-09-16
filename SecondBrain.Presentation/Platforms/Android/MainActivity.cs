@@ -4,6 +4,7 @@ using Android.Content.PM;
 namespace SecondBrain.Presentation;
 
 [Activity(
+    Theme = "@style/Maui.SplashTheme",
     MainLauncher = true,
     LaunchMode = LaunchMode.SingleTop,
     ConfigurationChanges = ConfigChanges.ScreenSize

@@ -15,6 +15,7 @@ readonly emulator_log="${SECOND_BRAIN_EMULATOR_LOG:-${RUNNER_TEMP:-${TMPDIR:-/tm
 readonly headless="${SECOND_BRAIN_HEADLESS:-true}"
 readonly keep_emulator="${SECOND_BRAIN_KEEP_EMULATOR:-false}"
 readonly force_emulator="${SECOND_BRAIN_FORCE_EMULATOR:-false}"
+readonly startup_stability_seconds="${SECOND_BRAIN_STARTUP_STABILITY_SECONDS:-10}"
 
 emulator_gpu="${SECOND_BRAIN_EMULATOR_GPU:-}"
 if [[ -z "$emulator_gpu" ]]; then
@@ -41,13 +42,26 @@ cleanup() {
 }
 
 show_diagnostics() {
-  if [[ -n "$selected_device" ]]; then
-    "$adb" -s "$selected_device" logcat -d 2>/dev/null || true
+  if [[ -n "${selected_device:-}" && -n "${adb:-}" && -x "${adb:-}" ]]; then
+    echo >&2
+    echo "=== Android crash buffer (last 120 lines) ===" >&2
+    "$adb" -s "$selected_device" logcat -b crash -d -v brief 2>/dev/null \
+      | tail -n 120 >&2 || true
+
+    echo >&2
+    echo "=== App exit info (first 120 lines) ===" >&2
+    "$adb" -s "$selected_device" shell dumpsys activity exit-info "$application_id" 2>/dev/null \
+      | sed -n '1,120p' >&2 || true
   fi
   if [[ -f "$emulator_log" ]]; then
-    echo "Android emulator log: $emulator_log" >&2
-    cat "$emulator_log" >&2
+    echo >&2
+    echo "=== Android emulator log (last 120 lines): $emulator_log ===" >&2
+    tail -n 120 "$emulator_log" >&2 || true
   fi
+}
+
+app_pid() {
+  "$adb" -s "$selected_device" shell pidof "$application_id" 2>/dev/null | tr -d '\r'
 }
 
 trap cleanup EXIT
@@ -144,22 +158,72 @@ else
 fi
 
 export ANDROID_SERIAL="$selected_device"
+
+# Build a normal APK, install it explicitly, and launch the resolved launcher
+# activity ourselves. The MAUI Run target is designed for an interactive run and
+# may return a non-zero status when its launched process terminates; using it as
+# the smoke-test control plane obscures whether installation, launch, or startup
+# stability actually failed.
 dotnet build "$project_path" \
   --configuration Debug \
   --no-restore \
-  -f net10.0-android \
-  -t:Run
+  -f net10.0-android
 
+apk_dir="$repository_root/SecondBrain.Presentation/bin/Debug/net10.0-android"
+apk_path="$(find "$apk_dir" -maxdepth 1 -type f -name '*-Signed.apk' -print -quit)"
+if [[ -z "$apk_path" ]]; then
+  apk_path="$(find "$apk_dir" -maxdepth 1 -type f -name '*.apk' -print -quit)"
+fi
+[[ -n "$apk_path" ]] || fail "no Android APK was produced under $apk_dir"
+
+echo "Installing $(basename -- "$apk_path") on $selected_device..."
+"$adb" -s "$selected_device" install -r -t "$apk_path"
+
+# Do not let a process left over from an earlier run satisfy the startup check,
+# and keep the crash buffer scoped to this launch.
+"$adb" -s "$selected_device" shell am force-stop "$application_id" >/dev/null 2>&1 || true
+"$adb" -s "$selected_device" logcat -b crash -c >/dev/null 2>&1 || true
+
+launcher_component="$(
+  "$adb" -s "$selected_device" shell cmd package resolve-activity --brief "$application_id" 2>/dev/null \
+    | tr -d '\r' \
+    | tail -n 1
+)"
+[[ "$launcher_component" == */* ]] || fail "could not resolve launcher activity for $application_id"
+
+echo "Launching $launcher_component..."
+"$adb" -s "$selected_device" shell am start -W -n "$launcher_component"
+
+started_pid=""
 for _ in {1..30}; do
-  if [[ -n "$("$adb" -s "$selected_device" shell pidof "$application_id" 2>/dev/null | tr -d '\r')" ]]; then
-    echo "SecondBrain is running on $selected_device."
-    if [[ "$started_emulator" == true && "$keep_emulator" == true ]]; then
-      echo "The emulator will remain running for interactive use."
-      echo "Stop it with: $adb -s $selected_device emu kill"
-    fi
-    exit 0
+  started_pid="$(app_pid)"
+  if [[ -n "$started_pid" ]]; then
+    break
   fi
   sleep 2
 done
 
-fail "SecondBrain did not start on $selected_device"
+if [[ -z "$started_pid" ]]; then
+  echo "error: SecondBrain did not start on $selected_device" >&2
+  show_diagnostics
+  exit 1
+fi
+
+# Seeing a PID once is not enough: Android can create the process and then crash
+# during Activity.OnCreate. Require the same process to survive a stabilization
+# window so startup regressions fail CI instead of being reported as successful.
+for ((second = 1; second <= startup_stability_seconds; second++)); do
+  sleep 1
+  current_pid="$(app_pid)"
+  if [[ -z "$current_pid" || "$current_pid" != "$started_pid" ]]; then
+    echo "error: SecondBrain exited or restarted during the ${startup_stability_seconds}s startup stability window" >&2
+    show_diagnostics
+    exit 1
+  fi
+done
+
+echo "SecondBrain is running stably on $selected_device (PID $started_pid)."
+if [[ "$started_emulator" == true && "$keep_emulator" == true ]]; then
+  echo "The emulator will remain running for interactive use."
+  echo "Stop it with: $adb -s $selected_device emu kill"
+fi
