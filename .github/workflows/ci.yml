@@ -19,7 +19,7 @@ concurrency:
 jobs:
   baseline:
     name: Shared workflow policy
-    uses: yaron-E92/AutoDev/.github/workflows/profile-baseline.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
+    uses: FullHouseDevelopment/AutoDev/.github/workflows/profile-baseline.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
     with:
       ref: ${{ github.sha }}
       require_concurrency: true
@@ -29,7 +29,7 @@ jobs:
   headless-dotnet:
     name: Headless .NET validation
     needs: [baseline]
-    uses: yaron-E92/AutoDev/.github/workflows/profile-dotnet.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
+    uses: FullHouseDevelopment/AutoDev/.github/workflows/profile-dotnet.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
     with:
       ref: ${{ github.sha }}
       global_json_file: global.json
@@ -44,7 +44,7 @@ jobs:
   maui-validation:
     name: MAUI product validation
     needs: [baseline]
-    uses: yaron-E92/AutoDev/.github/workflows/profile-maui.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
+    uses: FullHouseDevelopment/AutoDev/.github/workflows/profile-maui.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
     with:
       ref: ${{ github.sha }}
       global_json_file: global.json

@@ -21,7 +21,7 @@ jobs:
   versionIntent:
     name: Version intent
     if: github.event_name == 'pull_request'
-    uses: yaron-E92/AutoDev/.github/workflows/version-intent.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
+    uses: FullHouseDevelopment/AutoDev/.github/workflows/version-intent.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
     with:
       pr_body: ${{ github.event.pull_request.body }}
       head: ${{ github.sha }}
@@ -35,7 +35,7 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.conclusion == 'success'
-    uses: yaron-E92/AutoDev/.github/workflows/version-tag.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
+    uses: FullHouseDevelopment/AutoDev/.github/workflows/version-tag.yml@b10a3f2a7bd52e01c78554dbc317300e180d690e
     with:
       head: ${{ github.event.workflow_run.head_sha }}
       branch: main
